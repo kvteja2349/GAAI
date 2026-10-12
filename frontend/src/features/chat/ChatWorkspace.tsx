@@ -65,7 +65,10 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       }
     }
 
-    // Default: initialize empty chat
+    // Default: initialize an empty in-memory session. We deliberately do NOT
+    // notify the parent here: lifting a freshly generated id up would change
+    // `conversationId`, re-run this effect, and create a new id every render
+    // (infinite render loop that also wipes streamed messages).
     const newConv: Conversation = {
       id: uuidv4(),
       title: 'New GAAI Session',
@@ -78,10 +81,7 @@ export const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     setCurrentConversation(newConv);
     setMessages([]);
     setTitleInput(newConv.title);
-    if (onSelectConversation) {
-      onSelectConversation(newConv.id);
-    }
-  }, [conversationId, onSelectConversation]);
+  }, [conversationId]);
 
   // Auto scroll to bottom
   useEffect(() => {

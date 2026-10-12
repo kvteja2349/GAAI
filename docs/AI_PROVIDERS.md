@@ -8,7 +8,7 @@ GAAI is built with a decoupled provider architecture, allowing smart automatic r
 
 | Provider | Models Supported | Context Window | Price | Setup Key |
 | :--- | :--- | :--- | :--- | :--- |
-| **Google Gemini** | `gemini-2.0-flash`, `gemini-1.5-flash`, `gemini-1.5-pro` | Up to 2,000,000 tokens | **Free** (15 RPM) | `GEMINI_API_KEY` |
+| **Google Gemini** | `gemini-3.8-flash`, `gemini-3.5-flash`, `gemini-3.1-flash-lite` | Up to 1,048,576 tokens | **Free** (15 RPM) | `GEMINI_API_KEY` |
 | **Groq Cloud** | `llama-3.3-70b-versatile`, `llama-3.1-8b-instant` | 128,000 tokens | **Free** tier | `GROQ_API_KEY` |
 | **Ollama Local** | `llama3`, `mistral`, `codellama`, `qwen2.5` | 8,192 - 32,768 tokens | **100% Free** | `OLLAMA_BASE_URL` |
 | **Custom OpenAI** | Any OpenAI-compatible endpoint (LM Studio, OpenRouter) | Configurable | Varies | `OPENAI_COMPATIBLE_BASE_URL` |
@@ -19,7 +19,7 @@ GAAI is built with a decoupled provider architecture, allowing smart automatic r
 ## 2. Smart Routing Policy
 
 When you send a prompt, GAAI analyzes its task category:
-- **Coding & Engineering**: Prefers `gemini-2.0-flash` or Groq `llama-3.3-70b-versatile`.
+- **Coding & Engineering**: Prefers `gemini-3.8-flash` or Groq `llama-3.3-70b-versatile`.
 - **Deep Research**: Augments prompt with live DuckDuckGo search citations.
 - **Analysis**: Routes to large-context models.
 - **Creative Writing**: High-temperature generation.

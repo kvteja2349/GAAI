@@ -17,36 +17,36 @@ export class GeminiProvider implements AIProvider {
   public listModels(): ModelCapability[] {
     return [
       {
-        id: 'gemini-2.0-flash',
-        name: 'Gemini 2.0 Flash',
+        id: 'gemini-3.5-flash',
+        name: 'Gemini 3.5 Flash',
         provider: 'Google Gemini',
         contextLength: 1048576,
         isLocal: false,
         capabilities: ['chat', 'code', 'vision', 'tools', 'search'],
-        description: 'Next-gen multimodal model with massive 1M context, blazing speed and reasoning.',
-        recommendedFor: ['coding', 'research', 'general', 'analysis'],
+        description: 'Reliable multimodal Flash model with massive 1M context, strong reasoning and stable free-tier throughput.',
+        recommendedFor: ['coding', 'research', 'general', 'analysis', 'creative'],
         freeTier: true
       },
       {
-        id: 'gemini-1.5-flash',
-        name: 'Gemini 1.5 Flash',
+        id: 'gemini-3.1-flash-lite',
+        name: 'Gemini 3.1 Flash Lite',
         provider: 'Google Gemini',
         contextLength: 1048576,
         isLocal: false,
         capabilities: ['chat', 'code', 'vision'],
-        description: 'Fast, cost-efficient, and versatile multimodal model with generous free tier.',
-        recommendedFor: ['coding', 'general', 'creative'],
+        description: 'Lightweight Flash Lite variant tuned for lowest latency and high free-tier availability.',
+        recommendedFor: ['general', 'creative'],
         freeTier: true
       },
       {
-        id: 'gemini-1.5-pro',
-        name: 'Gemini 1.5 Pro',
+        id: 'gemini-3.8-flash',
+        name: 'Gemini 3.8 Flash',
         provider: 'Google Gemini',
-        contextLength: 2097152,
+        contextLength: 1048576,
         isLocal: false,
-        capabilities: ['chat', 'code', 'vision', 'tools'],
-        description: 'High-intelligence flagship model with deep mathematical and complex reasoning.',
-        recommendedFor: ['analysis', 'research', 'coding'],
+        capabilities: ['chat', 'code', 'vision', 'tools', 'search'],
+        description: 'Newest multimodal Flash model; strongest reasoning but can hit high-demand 503s on the free tier.',
+        recommendedFor: ['coding', 'research', 'analysis'],
         freeTier: true
       }
     ];

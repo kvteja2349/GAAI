@@ -40,7 +40,7 @@ GAAI works immediately out of the box with the built-in **GAAI Autonomous Core**
 1. Go to [Google AI Studio](https://aistudio.google.com/) and create a free API key.
 2. Open `backend/.env` (or copy from `.env.example`).
 3. Set `GEMINI_API_KEY=your_key_here`.
-4. Restart backend. GAAI will now route requests to `gemini-2.0-flash`, `gemini-1.5-flash`, and `gemini-1.5-pro` with up to 1M token context!
+4. Restart backend. GAAI will now route requests to `gemini-3.8-flash`, `gemini-3.5-flash`, and `gemini-3.1-flash-lite` with up to 1M token context!
 
 ### Option B: Groq Cloud (Ultra-Fast)
 1. Go to [Groq Console](https://console.groq.com/) and create a free key.

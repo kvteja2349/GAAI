@@ -201,6 +201,8 @@ class ApiClient {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      let receivedDone = false;
+      let receivedError = false;
 
       (async () => {
         try {
@@ -222,14 +224,23 @@ class ApiClient {
                 if (event.type === 'chunk') {
                   onChunk(event.delta);
                 } else if (event.type === 'done') {
+                  receivedDone = true;
                   onDone(event);
                 } else if (event.type === 'error') {
+                  receivedError = true;
                   onError({ message: event.error, isCreditError: event.isCreditError });
                 }
               } catch {
                 // skip malformed sse line
               }
             }
+          }
+
+          // A proxy, provider, or server restart can close an SSE response
+          // without sending a terminal event. Do not leave the chat stuck in
+          // its streaming state in that case.
+          if (!receivedDone && !receivedError) {
+            onError({ message: 'The chat stream ended before the response was complete.' });
           }
         } catch (err: any) {
           if (err.name !== 'AbortError') {

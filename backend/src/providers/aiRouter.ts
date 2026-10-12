@@ -183,56 +183,84 @@ export class AIRouter {
     return results;
   }
 
-  public async selectBestModel(task: TaskType, requestedModelId?: string): Promise<{ provider: AIProvider; model: ModelCapability }> {
-    const allModels = this.listAllModels();
+  /**
+   * Returns true for transient upstream failures worth retrying on another model:
+   * free-tier rate limits, high-demand unavailability, and network/timeout errors.
+   */
+  private isTransientError(err: any): boolean {
+    const msg = String(err?.message || err || '');
+    return (
+      msg.includes('429') ||
+      msg.includes('503') ||
+      msg.includes('500') ||
+      msg.includes('502') ||
+      msg.includes('504') ||
+      msg.includes('overloaded') ||
+      msg.includes('UNAVAILABLE') ||
+      msg.includes('high demand') ||
+      msg.includes('quota') ||
+      msg.includes('fetch failed') ||
+      msg.includes('timeout') ||
+      msg.includes('aborted')
+    );
+  }
 
-    // 1. If explicit model requested and exists
+  /**
+   * Builds an ordered fallback chain of {provider, model} candidates.
+   * The explicitly requested (or task-preferred) model comes first, followed by
+   * every other usable model in provider priority order (Gemini → Groq → Ollama → custom → GAAI core).
+   */
+  private buildCandidateChain(task: TaskType, requestedModelId?: string): { provider: AIProvider; model: ModelCapability }[] {
+    const chain: { provider: AIProvider; model: ModelCapability }[] = [];
+    const seen = new Set<string>();
+
+    const push = (provider: AIProvider, model: ModelCapability) => {
+      const key = `${provider.id}:${model.id}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      chain.push({ provider, model });
+    };
+
+    // 1. Explicit model request (skips 'auto')
     if (requestedModelId && requestedModelId !== 'auto') {
-      const model = allModels.find(m => m.id === requestedModelId);
-      if (model) {
-        for (const prov of this.providers.values()) {
-          if (prov.listModels().some(m => m.id === model.id)) {
-            const health = await prov.checkHealth();
-            if (health.isHealthy) {
-              return { provider: prov, model };
-            }
-          }
+      for (const provider of this.providers.values()) {
+        if (provider.id === 'gaai-local') continue;
+        if (!provider.isConfigured() && provider.id !== 'ollama') continue;
+        const model = provider.listModels().find(m => m.id === requestedModelId);
+        if (model) {
+          push(provider, model);
+          break;
         }
       }
     }
 
-    // 2. Try configured online providers first (Gemini, Groq)
-    const gemini = this.providers.get('gemini');
-    if (gemini?.isConfigured()) {
-      const health = await gemini.checkHealth();
-      if (health.isHealthy) {
-        const models = gemini.listModels();
-        const preferred = models.find(m => m.recommendedFor.includes(task)) || models[0];
-        return { provider: gemini, model: preferred };
-      }
+    // 2. Task-preferred model from each configured provider, then their remaining models
+    const providerPriority = ['gemini', 'groq', 'ollama', 'custom', 'gaai-local'];
+    for (const id of providerPriority) {
+      const provider = this.providers.get(id);
+      if (!provider) continue;
+      if (id !== 'ollama' && id !== 'gaai-local' && !provider.isConfigured()) continue;
+
+      const models = provider.listModels();
+      const preferred = models.find(m => m.recommendedFor.includes(task));
+      if (preferred) push(provider, preferred);
+      for (const model of models) push(provider, model);
     }
 
-    const groq = this.providers.get('groq');
-    if (groq?.isConfigured()) {
-      const health = await groq.checkHealth();
-      if (health.isHealthy) {
-        const models = groq.listModels();
-        const preferred = models.find(m => m.recommendedFor.includes(task)) || models[0];
-        return { provider: groq, model: preferred };
-      }
+    return chain;
+  }
+
+  public async selectBestModel(task: TaskType, requestedModelId?: string): Promise<{ provider: AIProvider; model: ModelCapability }> {
+    const chain = this.buildCandidateChain(task, requestedModelId);
+
+    // Verify cloud providers are reachable; keep local/core entries regardless.
+    for (const candidate of chain) {
+      if (candidate.provider.id === 'gaai-local') return candidate;
+      if (candidate.provider.id === 'ollama') continue;
+      const health = await candidate.provider.checkHealth();
+      if (health.isHealthy) return candidate;
     }
 
-    // 3. Try local Ollama if healthy
-    const ollama = this.providers.get('ollama');
-    if (ollama) {
-      const health = await ollama.checkHealth();
-      if (health.isHealthy) {
-        const models = ollama.listModels();
-        return { provider: ollama, model: models[0] };
-      }
-    }
-
-    // 4. Fallback to GAAI Autonomous Core
     const local = this.providers.get('gaai-local')!;
     return { provider: local, model: local.listModels()[0] };
   }
@@ -282,44 +310,68 @@ export class AIRouter {
         }
       }
 
-      const task = this.classifyTask(lastUserMsg);
-      const { provider, model } = await this.selectBestModel(task, requestedModelId);
-
       let accumulatedText = '';
       let stoppedForCredits = false;
+      const task = this.classifyTask(lastUserMsg);
+      const candidates = this.buildCandidateChain(task, requestedModelId);
+      let selectedProvider: AIProvider | null = null;
+      let selectedModel: ModelCapability | null = null;
+      let lastError: any = null;
 
-      // Stream generation
-      await provider.generateStream(messages, model.id, (delta: string) => {
-        if (stoppedForCredits) return;
+      // Try the preferred model first, then automatically fall back when a
+      // provider is rate-limited, overloaded, or unavailable before streaming.
+      for (const candidate of candidates) {
+        let emittedAny = false;
+        try {
+          const streamResult = await candidate.provider.generateStream(messages, candidate.model.id, (delta: string) => {
+            if (stoppedForCredits) return;
 
-        accumulatedText += delta;
-        const currentLines = LineCounter.countLines(accumulatedText);
+            emittedAny = true;
+            accumulatedText += delta;
+            const currentLines = LineCounter.countLines(accumulatedText);
 
-        // Check if we hit the 500-line milestone per credit
-        const authorizedLines = currentReservedCredits * LineCounter.MAX_LINES_PER_CREDIT;
-        if (currentLines > authorizedLines) {
-          // Attempt automatic continuation: check if another credit is available
-          const hasMoreCredits = creditManager.hasAvailableCredits(userId, 1);
-          // Note: we check synchronously or reserve next
-          currentReservedCredits += 1;
+            // Check if we hit the 500-line milestone for another credit.
+            const authorizedLines = currentReservedCredits * LineCounter.MAX_LINES_PER_CREDIT;
+            if (currentLines > authorizedLines) {
+              void creditManager.hasAvailableCredits(userId, 1).then(hasMoreCredits => {
+                if (hasMoreCredits) currentReservedCredits += 1;
+              });
+            }
+
+            if (onChunk) onChunk(delta);
+          });
+
+          if (!streamResult.fullText.trim() && !accumulatedText.trim()) {
+            lastError = new Error(`${candidate.model.id} returned an empty response`);
+            continue;
+          }
+
+          selectedProvider = candidate.provider;
+          selectedModel = candidate.model;
+          break;
+        } catch (err: any) {
+          lastError = err;
+          // Once content has reached the client, switching models would
+          // duplicate or corrupt the answer, so surface the original error.
+          if (emittedAny || !this.isTransientError(err)) throw err;
         }
+      }
 
-        if (onChunk) {
-          onChunk(delta);
-        }
-      });
+      if (!selectedProvider || !selectedModel) {
+        throw lastError || new Error('All configured AI providers failed to generate a response.');
+      }
 
       const totalLines = LineCounter.countLines(accumulatedText);
       const commitResult = await creditManager.commitGenerationDebit(
         userId,
         reservationId,
         totalLines,
-        { model: model.id, provider: provider.id }
+        { model: selectedModel.id, provider: selectedProvider.id }
       );
 
       return {
         fullText: accumulatedText,
-        modelUsed: `${model.name} (${provider.name})`,
+        modelUsed: `${selectedModel.name} (${selectedProvider.name})`,
         linesGenerated: totalLines,
         creditsCharged: commitResult.creditsCharged,
         stoppedForCredits,

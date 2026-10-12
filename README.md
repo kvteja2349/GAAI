@@ -29,7 +29,7 @@ GAAI is a production-grade multipurpose AI web platform combining an AI assistan
   6. **Six-Ball Cricket Batting Challenge**: Face 6 deliveries — **score at least 25 runs to win +1 credit!**
 - **Smart Multi-Provider AI Router**:
   - Automatic task classification (`coding`, `research`, `analysis`, `creative`).
-  - Adapters for **Google Gemini** (`gemini-2.0-flash`, `gemini-1.5-pro`), **Groq** (`llama-3.3-70b`), and local **Ollama**.
+  - Adapters for **Google Gemini** (`gemini-3.8-flash`, `gemini-3.5-flash`), **Groq** (`llama-3.3-70b`), and local **Ollama**.
   - Built-in fallback GAAI Autonomous Core.
 - **Live Web Search**: DuckDuckGo instant retrieval with citations and links.
 - **Generative AI Images**: Zero-cost, high-fidelity Flux.1 image generation via Pollinations.ai.

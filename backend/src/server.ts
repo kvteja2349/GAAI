@@ -1,11 +1,10 @@
+// Load environment variables before any module reads process.env
+import 'dotenv/config';
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import dotenv from 'dotenv';
-
-// Load environment variables
-dotenv.config();
 
 // Route imports
 import authRoutes from './routes/auth.js';
